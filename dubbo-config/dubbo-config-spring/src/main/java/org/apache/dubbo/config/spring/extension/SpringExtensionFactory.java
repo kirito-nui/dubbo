@@ -21,17 +21,12 @@ import org.apache.dubbo.common.extension.SPI;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ConcurrentHashSet;
-import org.apache.dubbo.config.DubboShutdownHook;
-import org.apache.dubbo.config.spring.util.ApplicationContextUtils;
-
-import com.alibaba.spring.util.BeanFactoryUtils;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEvent;
-import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.event.ContextClosedEvent;
 
 import java.util.Set;
+
+import static org.apache.dubbo.config.spring.util.DubboBeanUtils.getOptionalBean;
 
 /**
  * SpringExtensionFactory
@@ -40,15 +35,12 @@ public class SpringExtensionFactory implements ExtensionFactory {
     private static final Logger logger = LoggerFactory.getLogger(SpringExtensionFactory.class);
 
     private static final Set<ApplicationContext> CONTEXTS = new ConcurrentHashSet<ApplicationContext>();
-    private static final ApplicationListener SHUTDOWN_HOOK_LISTENER = new ShutdownHookListener();
 
     public static void addApplicationContext(ApplicationContext context) {
         CONTEXTS.add(context);
         if (context instanceof ConfigurableApplicationContext) {
             ((ConfigurableApplicationContext) context).registerShutdownHook();
-            DubboShutdownHook.getDubboShutdownHook().unregister();
         }
-        ApplicationContextUtils.addApplicationListener(context, SHUTDOWN_HOOK_LISTENER);
     }
 
     public static void removeApplicationContext(ApplicationContext context) {
@@ -74,24 +66,15 @@ public class SpringExtensionFactory implements ExtensionFactory {
         }
 
         for (ApplicationContext context : CONTEXTS) {
-            T bean = BeanFactoryUtils.getOptionalBean(context, name, type);
+            T bean = getOptionalBean(context, name, type);
             if (bean != null) {
                 return bean;
             }
         }
 
-        logger.warn("No spring extension (bean) named:" + name + ", try to find an extension (bean) of type " + type.getName());
+        //logger.warn("No spring extension (bean) named:" + name + ", try to find an extension (bean) of type " + type.getName());
 
         return null;
     }
 
-    private static class ShutdownHookListener implements ApplicationListener {
-        @Override
-        public void onApplicationEvent(ApplicationEvent event) {
-            if (event instanceof ContextClosedEvent) {
-                DubboShutdownHook shutdownHook = DubboShutdownHook.getDubboShutdownHook();
-                shutdownHook.doDestroy();
-            }
-        }
-    }
 }

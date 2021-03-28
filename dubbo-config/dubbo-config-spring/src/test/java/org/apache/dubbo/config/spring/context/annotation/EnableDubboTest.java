@@ -18,7 +18,6 @@ package org.apache.dubbo.config.spring.context.annotation;
 
 import org.apache.dubbo.config.RegistryConfig;
 import org.apache.dubbo.config.spring.api.DemoService;
-import org.apache.dubbo.config.spring.beans.factory.ServiceBeanPostProcessor;
 import org.apache.dubbo.config.spring.context.annotation.consumer.test.TestConsumerConfiguration;
 import org.apache.dubbo.config.spring.context.annotation.provider.DemoServiceImpl;
 import org.apache.dubbo.rpc.model.ApplicationModel;
@@ -33,6 +32,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionException;
@@ -47,19 +47,20 @@ import static org.springframework.core.annotation.AnnotationUtils.findAnnotation
  *
  * @since 2.5.8
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class EnableDubboTest {
 
     private AnnotationConfigApplicationContext context;
 
     @BeforeEach
     public void setUp() {
-        ApplicationModel.getConfigManager().clear();
+        ApplicationModel.reset();
         context = new AnnotationConfigApplicationContext();
     }
 
     @AfterEach
     public void tearDown() {
-        ApplicationModel.getConfigManager().clear();
+        ApplicationModel.reset();
         context.close();
     }
 
@@ -151,11 +152,6 @@ public class EnableDubboTest {
     @PropertySource("classpath:/META-INF/dubbo-provider.properties")
     @EnableTransactionManagement
     public static class TestProviderConfiguration {
-
-        @Bean
-        public ServiceBeanPostProcessor serviceBeanPostProcessor() {
-            return new ServiceBeanPostProcessor();
-        }
 
         @Primary
         @Bean

@@ -59,7 +59,7 @@ public abstract class AbstractReferenceConfig extends AbstractInterfaceConfig {
     /**
      * Lazy create connection
      */
-    protected Boolean lazy = false;
+    protected Boolean lazy;
 
     protected String reconnect;
 
@@ -71,20 +71,14 @@ public abstract class AbstractReferenceConfig extends AbstractInterfaceConfig {
     //TODO solve merge problem
     protected Boolean stubevent;//= Constants.DEFAULT_STUB_EVENT;
 
-    /**
-     * The remote service version the customer side will reference
-     */
-    protected String version;
 
-    /**
-     * The remote service group the customer side will reference
-     */
-    protected String group;
 
     /**
      * declares which app or service this interface belongs to
      */
     protected String providedBy;
+
+    protected String router;
 
     public Boolean isCheck() {
         return check;
@@ -210,21 +204,7 @@ public abstract class AbstractReferenceConfig extends AbstractInterfaceConfig {
         this.sticky = sticky;
     }
 
-    public String getVersion() {
-        return version;
-    }
 
-    public void setVersion(String version) {
-        this.version = version;
-    }
-
-    public String getGroup() {
-        return group;
-    }
-
-    public void setGroup(String group) {
-        this.group = group;
-    }
 
     @Parameter(key = "provided-by")
     public String getProvidedBy() {
@@ -233,5 +213,14 @@ public abstract class AbstractReferenceConfig extends AbstractInterfaceConfig {
 
     public void setProvidedBy(String providedBy) {
         this.providedBy = providedBy;
+    }
+
+    @Parameter(key = "router", append = true)
+    public String getRouter() {
+        return router;
+    }
+
+    public void setRouter(String router) {
+        this.router = router;
     }
 }

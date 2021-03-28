@@ -26,6 +26,7 @@ import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.ServiceMetadata;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +53,21 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     private static final long serialVersionUID = -1559314110797223229L;
 
+    /**
+     * The interface name of the exported service
+     */
+    protected String interfaceName;
+    /**
+     * The remote service version the customer/provider side will reference
+     */
+    protected String version;
+
+    /**
+     * The remote service group the customer/provider side will reference
+     */
+    protected String group;
+    
+    protected ServiceMetadata serviceMetadata;
     /**
      * Local impl class name for the service interface
      */
@@ -115,7 +131,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     protected ModuleConfig module;
 
     /**
-     * Registry centers
+     * The registry list the service will register to
+     * Also see {@link #registryIds}, only one of them will work.
      */
     protected List<RegistryConfig> registries;
 
@@ -124,6 +141,10 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      */
     private List<MethodConfig> methods;
 
+    /**
+     * The id list of registries the service will register to
+     * Also see {@link #registries}, only one of them will work.
+     */
     protected String registryIds;
 
     // connection events
@@ -148,6 +169,9 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     private String scope;
 
     protected String tag;
+
+    private  Boolean auth;
+
 
     /**
      * The url of the reference service
@@ -235,16 +259,16 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      *                       side, it is the {@link Class} of the remote service interface
      */
     public void checkStubAndLocal(Class<?> interfaceClass) {
-        if (ConfigUtils.isNotEmpty(local)) {
-            Class<?> localClass = ConfigUtils.isDefault(local) ?
-                    ReflectUtils.forName(interfaceClass.getName() + "Local") : ReflectUtils.forName(local);
-            verify(interfaceClass, localClass);
-        }
-        if (ConfigUtils.isNotEmpty(stub)) {
-            Class<?> localClass = ConfigUtils.isDefault(stub) ?
-                    ReflectUtils.forName(interfaceClass.getName() + "Stub") : ReflectUtils.forName(stub);
-            verify(interfaceClass, localClass);
-        }
+        verifyStubAndLocal(local, "Local", interfaceClass);
+        verifyStubAndLocal(stub, "Stub", interfaceClass);
+    }
+    
+    public void verifyStubAndLocal(String className, String label, Class<?> interfaceClass){
+    	if (ConfigUtils.isNotEmpty(className)) {
+            Class<?> localClass = ConfigUtils.isDefault(className) ?
+                    ReflectUtils.forName(interfaceClass.getName() + label) : ReflectUtils.forName(className);
+                        verify(interfaceClass, localClass);
+            }
     }
 
     private void verify(Class<?> interfaceClass, Class<?> localClass) {
@@ -272,12 +296,14 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     RegistryConfig registryConfig = new RegistryConfig();
                     registryConfig.refresh();
                     registryConfigs.add(registryConfig);
+                } else {
+                    registryConfigs = new ArrayList<>(registryConfigs);
                 }
                 setRegistries(registryConfigs);
             }
         } else {
             String[] ids = COMMA_SPLIT_PATTERN.split(registryIds);
-            List<RegistryConfig> tmpRegistries = CollectionUtils.isNotEmpty(registries) ? registries : new ArrayList<>();
+            List<RegistryConfig> tmpRegistries = new ArrayList<>();
             Arrays.stream(ids).forEach(id -> {
                 if (tmpRegistries.stream().noneMatch(reg -> reg.getId().equals(id))) {
                     Optional<RegistryConfig> globalRegistry = ApplicationModel.getConfigManager().getRegistry(id);
@@ -302,11 +328,49 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     }
 
-    protected void computeValidRegistryIds() {
-        if (StringUtils.isEmpty(getRegistryIds())) {
-            if (getApplication() != null && StringUtils.isNotEmpty(getApplication().getRegistryIds())) {
-                setRegistryIds(getApplication().getRegistryIds());
+    protected boolean notHasSelfRegistryProperty() {
+        return CollectionUtils.isEmpty(registries) && StringUtils.isEmpty(registryIds);
+    }
+
+    public void completeCompoundConfigs(AbstractInterfaceConfig interfaceConfig) {
+        if (interfaceConfig != null) {
+            if (application == null) {
+                setApplication(interfaceConfig.getApplication());
             }
+            if (module == null) {
+                setModule(interfaceConfig.getModule());
+            }
+            if (notHasSelfRegistryProperty()) {
+                setRegistries(interfaceConfig.getRegistries());
+                setRegistryIds(interfaceConfig.getRegistryIds());
+            }
+            if (monitor == null) {
+                setMonitor(interfaceConfig.getMonitor());
+            }
+        }
+        if (module != null) {
+            if (notHasSelfRegistryProperty()) {
+                setRegistries(module.getRegistries());
+            }
+            if (monitor == null) {
+                setMonitor(module.getMonitor());
+            }
+        }
+        if (application != null) {
+            if (notHasSelfRegistryProperty()) {
+                setRegistries(application.getRegistries());
+                setRegistryIds(application.getRegistryIds());
+            }
+            if (monitor == null) {
+                setMonitor(application.getMonitor());
+            }
+        }
+    }
+    
+    protected void computeValidRegistryIds() {
+        if (application != null && notHasSelfRegistryProperty()) {
+            setRegistries(application.getRegistries());
+            setRegistryIds(application.getRegistryIds());
         }
     }
 
@@ -408,11 +472,18 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         this.layer = layer;
     }
 
+    /**
+     * Always use the global ApplicationConfig
+     */
     public ApplicationConfig getApplication() {
-        if (application != null) {
+        ApplicationConfig globalApplication = ApplicationModel.getConfigManager().getApplicationOrElseThrow();
+        if (globalApplication == null) {
             return application;
         }
-        return ApplicationModel.getConfigManager().getApplicationOrElseThrow();
+        if (application != null && !StringUtils.isEquals(application.getName(), globalApplication.getName())) {
+            return application;
+        }
+        return globalApplication;
     }
 
     @Deprecated
@@ -491,6 +562,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         if (monitor != null) {
             return monitor;
         }
+        // FIXME: instead of return null, we should set default monitor when getMonitor() return null in ConfigManager
         return ApplicationModel.getConfigManager().getMonitor().orElse(null);
     }
 
@@ -630,7 +702,57 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         this.tag = tag;
     }
 
+    public Boolean getAuth() {
+        return auth;
+    }
+
+    public void setAuth(Boolean auth) {
+        this.auth = auth;
+    }
+
     public SslConfig getSslConfig() {
         return ApplicationModel.getConfigManager().getSsl().orElse(null);
+    }
+    
+    public void initServiceMetadata(AbstractInterfaceConfig interfaceConfig) {
+        serviceMetadata.setVersion(getVersion(interfaceConfig));
+        serviceMetadata.setGroup(getGroup(interfaceConfig));
+        serviceMetadata.setDefaultGroup(getGroup(interfaceConfig));
+        serviceMetadata.setServiceInterfaceName(getInterface());
+    }
+    
+    public String getGroup(AbstractInterfaceConfig interfaceConfig) {
+        return StringUtils.isEmpty(this.group) ? (interfaceConfig != null ? interfaceConfig.getGroup() : this.group) : this.group;
+    }
+
+    public String getVersion(AbstractInterfaceConfig interfaceConfig) {
+        return StringUtils.isEmpty(this.version) ? (interfaceConfig != null ? interfaceConfig.getVersion() : this.version) : this.version;
+    }
+    
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String getGroup() {
+        return group;
+    }
+
+    public void setGroup(String group) {
+        this.group = group;
+    }
+    
+    public String getInterface() {
+        return interfaceName;
+    }
+    
+    public void setInterface(String interfaceName) {
+        this.interfaceName = interfaceName;
+//         if (StringUtils.isEmpty(id)) {
+//             id = interfaceName;
+//         }
     }
 }

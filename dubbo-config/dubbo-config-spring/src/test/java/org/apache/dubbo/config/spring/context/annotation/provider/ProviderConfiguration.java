@@ -19,7 +19,6 @@ package org.apache.dubbo.config.spring.context.annotation.provider;
 import org.apache.dubbo.config.ApplicationConfig;
 import org.apache.dubbo.config.ProtocolConfig;
 import org.apache.dubbo.config.RegistryConfig;
-import org.apache.dubbo.config.spring.beans.factory.ServiceBeanPostProcessor;
 import org.apache.dubbo.config.spring.context.annotation.DubboComponentScan;
 
 import org.springframework.context.annotation.Bean;
@@ -69,7 +68,7 @@ public class ProviderConfiguration {
     /**
      * Current protocol configuration, to replace XML config:
      * <prev>
-     * &lt;dubbo:protocol name="dubbo" port="12345"/&gt;
+     * &lt;dubbo:protocol name="injvm" port="-1"/&gt;
      * </prev>
      *
      * @return {@link ProtocolConfig} Bean
@@ -77,14 +76,9 @@ public class ProviderConfiguration {
     @Bean("dubbo")
     public ProtocolConfig protocolConfig() {
         ProtocolConfig protocolConfig = new ProtocolConfig();
-        protocolConfig.setName("dubbo");
-        protocolConfig.setPort(12345);
+        protocolConfig.setName("injvm");
+        protocolConfig.setPort(-1);
         return protocolConfig;
-    }
-
-    @Bean
-    public ServiceBeanPostProcessor serviceBeanPostProcessor() {
-        return new ServiceBeanPostProcessor();
     }
 
     @Primary
